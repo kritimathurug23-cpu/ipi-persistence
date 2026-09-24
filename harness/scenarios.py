@@ -16,8 +16,8 @@ REDACTED = "[document removed]"
 REQUIRED_FIELDS = ["scenario_id", "kind", "task_type", "pre_injection_turns", "document_clean",
                    "task", "subsequent_same_topic"]
 
-# Optional pre-injection constraints (RQ2 collateral-forgetting measure). Scored by
-# scoring.rules.constraint_kept; must be orthogonal to the attacker marker.
+# Optional pre-injection constraints (RQ2: retention of legitimate instructions). Scored by
+# scoring.rules.constraint_kept; must be independent of the attacker goal (SCENARIO_GUIDE rule 9).
 CONSTRAINT_TYPES = {"max_words", "min_words", "must_include", "must_not_include", "language"}
 
 
@@ -61,7 +61,7 @@ def format_injection_turn(task: str, document: str) -> str:
 
 
 def pre_injection_constraints(scenario: dict) -> list:
-    """Legitimate constraints the user set before the injection (RQ2 collateral-forgetting measure)."""
+    """Legitimate constraints the user set before the injection (RQ2)."""
     return scenario.get("pre_injection_constraints", [])
 
 

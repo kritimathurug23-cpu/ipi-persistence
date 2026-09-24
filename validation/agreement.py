@@ -5,6 +5,8 @@
 
 Reports Cohen's kappa for automatic marker vs human, and human vs human if a second
 annotator's file is given. Compare against the preregistered target (initial benchmark κ≈0.60).
+If `human_constraint_kept` was filled in, the same is reported for RQ2 constraint adherence
+(items marked NA or left blank are excluded).
 """
 from __future__ import annotations
 
@@ -27,16 +29,33 @@ def main():
     cfg = yaml.safe_load((ROOT / a.config).read_text())
     key = pd.read_csv(ROOT / cfg["run_dir"] / "validation/key.csv")
     l1 = pd.read_csv(a.labels).dropna(subset=["human_marker"])
-    d = key.merge(l1[["item_id", "human_marker", "human_drift"]], on="item_id")
+    if "human_constraint_kept" not in l1.columns:
+        l1["human_constraint_kept"] = None
+    d = key.merge(l1[["item_id", "human_marker", "human_drift", "human_constraint_kept"]], on="item_id")
     auto = d.marker.astype(str).str.lower().isin(["true", "1"]).astype(int)
     k = cohen_kappa_score(auto, d.human_marker.astype(int))
     print(f"Automatic marker vs annotator 1: kappa = {k:.3f} (n = {len(d)})")
     print("Disagreements by condition:")
     print(d.assign(disagree=(auto != d.human_marker.astype(int))).groupby("condition").disagree.mean().round(3))
+    # RQ2: automatic constraint adherence vs human (only items with both a 0/1 human label and an auto score)
+    if "constraint_kept" in d.columns:
+        hc = pd.to_numeric(d.human_constraint_kept, errors="coerce")
+        ac = d.constraint_kept.astype(str).str.lower().map({"true": 1, "false": 0})
+        ok = hc.isin([0, 1]) & ac.notna()
+        if ok.sum() >= 2:
+            kc = cohen_kappa_score(ac[ok].astype(int), hc[ok].astype(int))
+            print(f"Automatic constraint adherence vs annotator 1: kappa = {kc:.3f} (n = {int(ok.sum())})")
     if a.labels2:
         l2 = pd.read_csv(a.labels2).dropna(subset=["human_marker"])
         m = l1.merge(l2, on="item_id", suffixes=("_1", "_2"))
         print(f"Annotator 1 vs 2 (marker): kappa = {cohen_kappa_score(m.human_marker_1.astype(int), m.human_marker_2.astype(int)):.3f} (n = {len(m)})")
+        if "human_constraint_kept_1" in m.columns and "human_constraint_kept_2" in m.columns:
+            c1 = pd.to_numeric(m.human_constraint_kept_1, errors="coerce")
+            c2 = pd.to_numeric(m.human_constraint_kept_2, errors="coerce")
+            both = c1.isin([0, 1]) & c2.isin([0, 1])
+            if both.sum() >= 2:
+                print(f"Annotator 1 vs 2 (constraint): kappa = "
+                      f"{cohen_kappa_score(c1[both].astype(int), c2[both].astype(int)):.3f} (n = {int(both.sum())})")
         md = m.dropna(subset=["human_drift_1", "human_drift_2"])
         if len(md):
             kd = cohen_kappa_score(md.human_drift_1.astype(int), md.human_drift_2.astype(int), weights="linear")

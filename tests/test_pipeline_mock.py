@@ -18,7 +18,7 @@ def test_full_mock_pipeline(tmp_path):
     res = tmp_path / "run" / "results"
     for f in ("phase_a.jsonl", "phase_a_prompted.jsonl", "states.jsonl", "phase_b.jsonl", "clean.jsonl"):
         assert (res / f).exists() and (res / f).stat().st_size > 0, f
-    # RQ2: the collateral-forgetting score is recorded per subsequent turn
+    # RQ2: constraint adherence is recorded per subsequent turn
     import json
     with (res / "phase_b.jsonl").open() as fh:
         assert all("constraint_kept" in json.loads(line) for line in fh), "constraint_kept missing in phase_b"
