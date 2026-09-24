@@ -25,9 +25,10 @@ import yaml
 from harness.calls import CallClient, append_jsonl, read_jsonl
 from harness.conditions import CONDITIONS, apply_condition
 from harness.scenarios import (attack_document, format_injection_turn, load_scenarios,
-                               load_unrelated_tasks, subsequent_tasks)
+                               load_unrelated_tasks, pre_injection_constraints, subsequent_tasks)
 from scoring.markers import marker_present
-from scoring.rules import judge_drift, refused, spontaneous_detection, task_correct
+from scoring.rules import (constraints_all_kept, judge_drift, refused, spontaneous_detection,
+                           task_correct)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -206,6 +207,7 @@ def phase_b(ctx: Ctx):
             continue
         model, scen = models[st["model"]], scen_by_id[st["scenario_id"]]
         indep = scen["marker"].get("task_independent", False)
+        constraints = pre_injection_constraints(scen)
         for cond in CONDITIONS:
             task_types = ["same_topic", "unrelated"] if (cond in cross and indep) else [default_tt]
             for rep in range(reps):
@@ -238,6 +240,7 @@ def phase_b(ctx: Ctx):
                             "marker_task_independent": indep, "condition": cond, "task_type": tt,
                             "rep": rep, "turn": t, "marker": marker_present(out, scen["marker"]),
                             "correct": task_correct(out, task.get("required_keywords", [])),
+                            "constraint_kept": constraints_all_kept(out, constraints),
                             "refused": refused(out), "output": out})
         print(f"[phase-b] {st['state_id']} done", file=sys.stderr)
 
@@ -252,6 +255,7 @@ def clean(ctx: Ctx):
     for model in ctx.models:
         for scen in ctx.attacks:
             indep = scen["marker"].get("task_independent", False)
+            constraints = pre_injection_constraints(scen)
             task_types = ["same_topic", "unrelated"] if indep else [ctx.cfg["default_task_type"]]
             for rep in range(reps):
                 salt = f"CL|{scen['scenario_id']}|r{rep}"
@@ -285,6 +289,7 @@ def clean(ctx: Ctx):
                                 "condition": cond, "task_type": tt, "rep": rep, "turn": t,
                                 "marker": marker_present(out, scen["marker"]),
                                 "correct": task_correct(out, task.get("required_keywords", [])),
+                                "constraint_kept": constraints_all_kept(out, constraints),
                                 "refused": refused(out), "output": out,
                                 "turn0_correct": task_correct(out0, scen.get("task_required_keywords", []))})
         print(f"[clean] {model['name']} done", file=sys.stderr)

@@ -1,5 +1,6 @@
 from scoring.markers import detect_language, marker_present
-from scoring.rules import refused, spontaneous_detection, task_correct
+from scoring.rules import (constraint_kept, constraints_all_kept, refused, spontaneous_detection,
+                           task_correct)
 
 
 def test_canary_and_mention():
@@ -37,3 +38,30 @@ def test_task_correct_word_boundaries():
     assert not task_correct("Beautiful day.", ["Au"])            # no substring false positives
     assert task_correct("It costs 18,000 pounds.", ["18,000"])
     assert task_correct("anything", []) is None
+
+
+def test_constraint_kept_word_limits():
+    assert constraint_kept("one two three", {"type": "max_words", "value": 5})
+    assert not constraint_kept("one two three four five six", {"type": "max_words", "value": 5})
+    assert constraint_kept("one two three four five", {"type": "max_words", "value": 5})   # boundary
+    assert constraint_kept("one two three four", {"type": "min_words", "value": 3})
+    assert not constraint_kept("too short", {"type": "min_words", "value": 3})
+
+
+def test_constraint_kept_keywords_and_language():
+    assert constraint_kept("Hello Priya, here it is.", {"type": "must_include", "value": "Priya"})
+    assert not constraint_kept("Hello there.", {"type": "must_include", "value": "Priya"})
+    assert constraint_kept("A replacement will be sent.", {"type": "must_not_include", "value": "refund"})
+    assert not constraint_kept("We will issue a refund.", {"type": "must_not_include", "value": "refund"})
+    assert constraint_kept("Here is a response to your request about the document.",
+                           {"type": "language", "value": "en"})
+    assert constraint_kept("Anything at all.", {"type": "unknown_type", "value": 1}) is None
+
+
+def test_constraints_all_kept_aggregate():
+    cs = [{"type": "max_words", "value": 5}, {"type": "must_include", "value": "Priya"}]
+    assert constraints_all_kept("Hi Priya here now", cs)                      # both hold
+    assert not constraints_all_kept("Hi Priya here now, plus many extra words", cs)  # too long
+    assert not constraints_all_kept("Hi there now", cs)                       # missing keyword
+    assert constraints_all_kept("anything", []) is None                       # no constraints
+    assert constraints_all_kept("anything", [{"type": "??", "value": 1}]) is None  # none applicable

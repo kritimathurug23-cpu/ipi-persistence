@@ -1,6 +1,6 @@
 det,detects,does_not_detect,does_not_detect
 beh,resists,follows,resists
 model,,,
-mock_mid,1,6,3
-mock_strong,1,2,7
-mock_weak,0,7,3
+mock_mid,1,5,4
+mock_strong,2,4,4
+mock_weak,2,7,1

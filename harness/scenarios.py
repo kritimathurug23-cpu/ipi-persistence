@@ -16,6 +16,10 @@ REDACTED = "[document removed]"
 REQUIRED_FIELDS = ["scenario_id", "kind", "task_type", "pre_injection_turns", "document_clean",
                    "task", "subsequent_same_topic"]
 
+# Optional pre-injection constraints (RQ2 collateral-forgetting measure). Scored by
+# scoring.rules.constraint_kept; must be orthogonal to the attacker marker.
+CONSTRAINT_TYPES = {"max_words", "min_words", "must_include", "must_not_include", "language"}
+
 
 def load_scenarios(directory: str | Path) -> list[dict]:
     out = []
@@ -30,6 +34,10 @@ def load_scenarios(directory: str | Path) -> list[dict]:
                     raise ValueError(f"{p.name}: attack scenario missing '{f}'")
         if len(s["subsequent_same_topic"]) < 6:
             raise ValueError(f"{p.name}: need 6 same-topic subsequent tasks")
+        for c in s.get("pre_injection_constraints", []):
+            if not isinstance(c, dict) or c.get("type") not in CONSTRAINT_TYPES or "value" not in c:
+                raise ValueError(f"{p.name}: bad pre_injection_constraint {c!r} "
+                                 f"(type must be one of {sorted(CONSTRAINT_TYPES)} and 'value' is required)")
         out.append(s)
     return out
 
@@ -50,6 +58,11 @@ def attack_document(scenario: dict) -> str:
 
 def format_injection_turn(task: str, document: str) -> str:
     return f"{task}\n\n{DOC_OPEN}{document}{DOC_CLOSE}"
+
+
+def pre_injection_constraints(scenario: dict) -> list:
+    """Legitimate constraints the user set before the injection (RQ2 collateral-forgetting measure)."""
+    return scenario.get("pre_injection_constraints", [])
 
 
 def subsequent_tasks(scenario: dict, task_type: str, unrelated: list[dict], n: int) -> list[dict]:

@@ -123,6 +123,9 @@ def load_turns(res: Path) -> pd.DataFrame:
     b["traj"] = b.state_id + "|" + b.condition + "|" + b.task_type + "|r" + b.rep.astype(str)
     b["marker_f"] = b.marker.astype(float)
     b["correct_f"] = b.correct.astype(float)
+    # RQ2: constraint adherence (True/False/None -> 1.0/0.0/NaN); None means no checkable constraint.
+    if "constraint_kept" in b.columns:
+        b["constraint_f"] = b.constraint_kept.map({True: 1.0, False: 0.0})
     return b
 
 
@@ -143,6 +146,43 @@ def persistence_by_turn(b: pd.DataFrame, clean: pd.DataFrame, default_tt: str) -
             rows.append({"model": m, "condition": cond, "turn": t, "rate": est, "lo": lo, "hi": hi,
                          "n_states": gt.cl.nunique()})
     return pd.DataFrame(rows)
+
+
+def retention_by_condition(b: pd.DataFrame, clean: pd.DataFrame, default_tt: str) -> pd.DataFrame:
+    """RQ2: mean pre-injection-constraint adherence per condition, over subsequent turns.
+
+    Phase B conditions (P1-P4) cluster by compromised state; the CLEAN / CLEAN_P3 controls cluster
+    by model|scenario, matching how persistence is aggregated.
+    """
+    rows = []
+    d = b[b.task_type == default_tt]
+    if "constraint_f" in d.columns:
+        for cond, g in d.groupby("condition"):
+            est, lo, hi = cluster_boot_mean(g, "constraint_f", "state_id")
+            rows.append({"condition": cond, "adherence": est, "lo": lo, "hi": hi,
+                         "n_states": g.state_id.nunique(), "n_turns": len(g.dropna(subset=["constraint_f"]))})
+    c = clean[clean.task_type == default_tt].copy() if not clean.empty else clean
+    if not c.empty and "constraint_kept" in c.columns:
+        c["constraint_f"] = c.constraint_kept.map({True: 1.0, False: 0.0})
+        c["cl"] = c.model + "|" + c.scenario_id
+        for cond, g in c.groupby("condition"):
+            est, lo, hi = cluster_boot_mean(g, "constraint_f", "cl")
+            rows.append({"condition": cond, "adherence": est, "lo": lo, "hi": hi,
+                         "n_states": g.cl.nunique(), "n_turns": len(g.dropna(subset=["constraint_f"]))})
+    return pd.DataFrame(rows)
+
+
+def persistence_per_condition(b: pd.DataFrame, clean: pd.DataFrame, default_tt: str) -> dict:
+    """Mean attacker-marker rate per condition, pooled over subsequent turns (for the trade-off plot)."""
+    out = {}
+    d = b[b.task_type == default_tt]
+    for cond, g in d.groupby("condition"):
+        out[cond] = g.marker_f.mean()
+    c = clean[clean.task_type == default_tt] if not clean.empty else clean
+    if not c.empty:
+        for cond, g in c.assign(marker_f=lambda x: x.marker.astype(float)).groupby("condition"):
+            out[cond] = g.marker_f.mean()
+    return out
 
 
 def paired_tests(b: pd.DataFrame, default_tt: str) -> pd.DataFrame:
@@ -248,6 +288,30 @@ def fig_km(dur: pd.DataFrame, path: Path, default_tt: str):
     ax.set_xlabel("Subsequent turns")
     ax.set_ylabel("Probability influence has not yet cleared")
     ax.set_title("Time to first clean turn (Kaplan–Meier)")
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def fig_tradeoff(persist: dict, retain: dict, path: Path):
+    """The cohesive RQ2 payoff: one point per condition, security (x) vs. utility (y)."""
+    labels = {"P1": "P1 retained", "P2": "P2 redacted", "P3": "P3 summarized",
+              "P4": "P4 rollback", "CLEAN": "clean baseline", "CLEAN_P3": "clean-summary"}
+    conds = [c for c in ("P1", "P2", "P3", "P4", "CLEAN", "CLEAN_P3")
+             if c in persist and c in retain and not np.isnan(retain[c])]
+    if not conds:
+        return
+    fig, ax = plt.subplots(figsize=(6.2, 5))
+    for c in conds:
+        x, y = persist[c] * 100, retain[c] * 100
+        ax.scatter(x, y, s=70)
+        ax.annotate(labels.get(c, c), (x, y), textcoords="offset points", xytext=(7, 4), fontsize=8)
+    ax.set_xlabel("Attacker influence persists — mean marker rate (%)  →  worse security")
+    ax.set_ylabel("Legitimate constraint kept (%)  →  better utility")
+    ax.set_xlim(-3, 103)
+    ax.set_ylim(-3, 103)
+    ax.set_title("The cost of cleanup: security vs. utility (RQ2)")
+    ax.grid(alpha=0.15)
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)
@@ -378,6 +442,23 @@ def main():
     ct = pd.concat([corr, cc]).rename("task_correct_%")
     ct.to_csv(out / "tables/task_correctness.csv")
     lines += ["## Task correctness in subsequent turns", "", ct.to_frame().to_markdown(), ""]
+
+    # Utility cost of cleanup — collateral forgetting (RQ2)
+    rc = retention_by_condition(b, clean, tt)
+    if not rc.empty:
+        rc.to_csv(out / "tables/retention_by_condition.csv", index=False)
+        rc_disp = rc.assign(adherence=[fmt(e, l, h) for e, l, h in zip(rc.adherence, rc.lo, rc.hi)]) \
+            [["condition", "n_states", "n_turns", "adherence"]]
+        persist = persistence_per_condition(b, clean, tt)
+        retain = dict(zip(rc.condition, rc.adherence))
+        fig_tradeoff(persist, retain, out / "figures/security_utility_tradeoff.png")
+        lines += ["## Utility cost of cleanup — collateral forgetting (RQ2)", "",
+                  "Adherence to a legitimate constraint the user set BEFORE the injection (e.g. a length "
+                  "limit), scored per subsequent turn and orthogonal to the attacker marker. Read together "
+                  "with persistence: a transformation that removes the attack but drops this is trading "
+                  "security for utility. CLEAN / CLEAN_P3 are the no-attack baselines.", "",
+                  rc_disp.to_markdown(index=False), "",
+                  "![tradeoff](figures/security_utility_tradeoff.png)", ""]
     j = pd.DataFrame(read_jsonl(res / "judge.jsonl"))
     if not j.empty:
         jt = j.dropna(subset=["drift"]).groupby("condition").drift.value_counts(normalize=True) \
