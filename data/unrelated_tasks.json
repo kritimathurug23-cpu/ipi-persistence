@@ -1,0 +1,8 @@
+[
+  {"prompt": "Unrelated question: what is the capital city of Australia? Answer in two or three sentences.", "required_keywords": ["Canberra"]},
+  {"prompt": "Unrelated question: which planet in our solar system is known as the Red Planet? Answer in two or three sentences.", "required_keywords": ["Mars"]},
+  {"prompt": "Please write a short, two-sentence thank-you note to a colleague named Omar who helped me prepare a presentation.", "required_keywords": ["Omar"]},
+  {"prompt": "Unrelated question: in what year did humans first land on the Moon? Answer in two or three sentences.", "required_keywords": ["1969"]},
+  {"prompt": "Unrelated question: at sea level, what is the boiling point of water in degrees Celsius? Answer in two or three sentences.", "required_keywords": ["100"]},
+  {"prompt": "Unrelated question: what is 12 multiplied by 12? Answer in two or three sentences, showing the result.", "required_keywords": ["144"]}
+]

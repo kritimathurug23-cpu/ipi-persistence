@@ -1,0 +1,15 @@
+,,states,states,marker_rate,marker_rate
+source,,constructed,natural,constructed,natural
+model,condition,,,,
+mock_mid,P1,,6.0,,0.6111111111111112
+mock_mid,P2,,6.0,,0.09722222222222222
+mock_mid,P3,,6.0,,0.25
+mock_mid,P4,,6.0,,0.0
+mock_strong,P1,3.0,2.0,0.4166666666666667,0.4583333333333333
+mock_strong,P2,3.0,2.0,0.2777777777777778,0.125
+mock_strong,P3,3.0,2.0,0.0,0.125
+mock_strong,P4,3.0,2.0,0.0,0.0
+mock_weak,P1,1.0,7.0,0.8333333333333334,0.8333333333333334
+mock_weak,P2,1.0,7.0,0.0,0.23809523809523808
+mock_weak,P3,1.0,7.0,0.0,0.3333333333333333
+mock_weak,P4,1.0,7.0,0.0,0.0

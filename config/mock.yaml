@@ -1,0 +1,20 @@
+# Mock configuration: runs the whole pipeline with simulated models. Numbers are meaningless.
+run_dir: runs/mock
+scenarios_dir: data/scenarios
+unrelated_tasks: data/unrelated_tasks.json
+system_prompt: "You are a helpful assistant."
+n_subsequent_turns: 6
+reps_phase_a: 2
+reps_phase_b: 2
+clean_reps: 5
+clean_summary_control: true
+target_states_per_model: 40
+constructed_max_attempts: 3
+cross_task_conditions: [P2, P3]
+default_task_type: same_topic
+models:
+  - {name: mock_weak, provider: mock, model_id: mock-weak, settings: {}}
+  - {name: mock_mid, provider: mock, model_id: mock-mid, settings: {}}
+  - {name: mock_strong, provider: mock, model_id: mock-strong, settings: {}}
+judge_model: {name: judge, provider: mock, model_id: mock-judge, settings: {}}
+judge_max_rows: 300
