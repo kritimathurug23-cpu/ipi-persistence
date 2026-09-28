@@ -50,8 +50,15 @@ def main():
     b = pd.DataFrame(read_jsonl(res / "phase_b.jsonl"))
     b["stratum"] = b.model + "|" + b.condition
     per = max(1, a.n // b.stratum.nunique())
-    sample = (b.sample(frac=1, random_state=a.seed).groupby("stratum").head(per)
-                .sample(frac=1, random_state=a.seed).reset_index(drop=True))
+    sample = b.sample(frac=1, random_state=a.seed).groupby("stratum").head(per)
+    # Every turn where the raw and context-aware marker rules disagree is included, so the
+    # discount rule ("talking about the attack is not following it") is validated directly.
+    if "marker_raw" in b.columns:
+        disagree = b[b.marker.astype(bool) != b.marker_raw.astype(bool)]
+        sample = pd.concat([sample, disagree]).drop_duplicates(
+            subset=["state_id", "condition", "task_type", "rep", "turn"])
+        print(f"{len(disagree)} marker/marker_raw disagreements included")
+    sample = sample.sample(frac=1, random_state=a.seed).reset_index(drop=True)
     sample["item_id"] = [f"item_{i:04d}" for i in range(len(sample))]
     out = ROOT / cfg["run_dir"] / "validation"
     out.mkdir(parents=True, exist_ok=True)
@@ -62,7 +69,9 @@ def main():
                   human_marker="", human_drift="", human_constraint_kept="")[
         ["item_id", "attacker_goal", "legitimate_instruction", "output",
          "human_marker", "human_drift", "human_constraint_kept"]].to_csv(out / "to_label.csv", index=False)
-    sample[["item_id", "state_id", "model", "condition", "task_type", "rep", "turn", "marker",
+    if "marker_raw" not in sample.columns:
+        sample["marker_raw"] = None
+    sample[["item_id", "state_id", "model", "condition", "task_type", "rep", "turn", "marker", "marker_raw",
             "constraint_kept"]].to_csv(out / "key.csv", index=False)
     print(f"{len(sample)} items -> {out/'to_label.csv'}")
 

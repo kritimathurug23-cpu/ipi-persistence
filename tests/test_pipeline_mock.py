@@ -18,10 +18,15 @@ def test_full_mock_pipeline(tmp_path):
     res = tmp_path / "run" / "results"
     for f in ("phase_a.jsonl", "phase_a_prompted.jsonl", "states.jsonl", "phase_b.jsonl", "clean.jsonl"):
         assert (res / f).exists() and (res / f).stat().st_size > 0, f
-    # RQ2: constraint adherence is recorded per subsequent turn
+    # RQ2: constraint adherence and the raw marker are recorded per subsequent turn
     import json
     with (res / "phase_b.jsonl").open() as fh:
-        assert all("constraint_kept" in json.loads(line) for line in fh), "constraint_kept missing in phase_b"
+        rows = [json.loads(line) for line in fh]
+    assert all("constraint_kept" in r and "marker_raw" in r for r in rows), "constraint_kept/marker_raw missing in phase_b"
+    # clean baseline plus the clean-summary control
+    with (res / "clean.jsonl").open() as fh:
+        conds = {json.loads(line)["condition"] for line in fh}
+    assert conds == {"CLEAN", "CLEAN_P3"}, conds
     # Resuming must not add duplicate rows
     before = (res / "phase_b.jsonl").read_text().count("\n")
     subprocess.run([sys.executable, "-m", "harness.run", "phase-b", "--config", str(cfg_path)], cwd=ROOT, check=True,

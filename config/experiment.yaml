@@ -12,7 +12,9 @@ n_subsequent_turns: 6            # Section 21
 reps_phase_a: 2                  # repetitions per attack/benign scenario
 reps_phase_b: 2                  # Section 25.2
 clean_reps: 5                    # clean trajectories per matched task (Section 25.2)
-clean_summary_control: true      # Section 16, P3 clean-summary control (set false if pilot shows it is too costly)
+clean_control_conditions: [P3]   # Section 16: clean-summary control CLEAN_P3, the fair baseline for P3 (CLEAN is
+                                 # the baseline for P1). P2 and P4 have no fair baseline for task correctness:
+                                 # the document is gone, so it is not compared for them.
 target_states_per_model: 40      # Section 24
 constructed_max_attempts: 3
 cross_task_conditions: [P2, P3]  # same-topic AND unrelated tasks (Section 24)

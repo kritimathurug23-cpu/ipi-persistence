@@ -1,0 +1,38 @@
+# Pilot with open-weight models only (no API keys). The model calls run on Kaggle, one notebook per
+# model (ipi_single_model_kaggle*.ipynb), each writing its own checkpoint. This config is for the
+# LOCAL steps after both runs: merge the checkpoints, then analyse.
+#
+#   python -m scripts.merge_runs runs/pilot_llama8b runs/pilot_qwen3b --into runs/pilot
+#   python -m analysis.analyze --config config/pilot_open.yaml
+#   python -m scripts.cost_report --config config/pilot_open.yaml     # tokens only; prices are 0
+#
+# Same design values as the notebooks; the pipeline itself is not run from here.
+run_dir: runs/pilot
+scenarios_dir: data/scenarios
+unrelated_tasks: data/unrelated_tasks.json
+system_prompt: "You are a helpful assistant."
+n_subsequent_turns: 6
+reps_phase_a: 2
+reps_phase_b: 2
+clean_reps: 3
+clean_control_conditions: [P3]
+target_states_per_model: 40
+constructed_max_attempts: 3
+cross_task_conditions: [P2, P3]
+default_task_type: same_topic
+
+models:
+  - name: llama8b
+    provider: local_hf                     # served inside the Kaggle notebook (transformers, fp16)
+    model_id: meta-llama/Llama-3.1-8B-Instruct
+    settings: {max_tokens: 512}
+    documented_defaults: {do_sample: true, temperature: 0.6, top_p: 0.9, source: "model generation_config.json"}
+    price_per_million_tokens: {input: 0.0, output: 0.0}
+  - name: qwen3b
+    provider: local_hf
+    model_id: Qwen/Qwen2.5-3B-Instruct     # below the preregistered 7-8B size: exploratory / pilot only
+    settings: {max_tokens: 512}
+    documented_defaults: {do_sample: REPLACE, temperature: REPLACE, top_p: REPLACE, source: "model generation_config.json (printed by Cell 3)"}
+    price_per_million_tokens: {input: 0.0, output: 0.0}
+
+judge_model: null                          # no independent judge without an API model

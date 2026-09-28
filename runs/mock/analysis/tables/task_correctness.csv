@@ -1,7 +1,7 @@
-condition,task_correct_%
-P1,0.0
-P2,0.0
-P3,0.0
-P4,0.0
-CLEAN,0.0
-CLEAN_P3,0.0
+condition,task_correct_%,baseline,baseline_correct_%,attack_minus_baseline,comparable
+P1,0.2,CLEAN,0.0,0.2,yes
+P2,0.0,,,,no: document not visible
+P3,0.1,CLEAN_P3,0.0,0.1,yes
+P4,0.0,,,,no: document not visible
+CLEAN,0.0,,,,
+CLEAN_P3,0.0,,,,

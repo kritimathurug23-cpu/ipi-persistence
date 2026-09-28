@@ -26,9 +26,22 @@ from harness.calls import CallClient, append_jsonl, read_jsonl
 from harness.conditions import CONDITIONS, apply_condition
 from harness.scenarios import (attack_document, format_injection_turn, load_scenarios,
                                load_unrelated_tasks, pre_injection_constraints, subsequent_tasks)
-from scoring.markers import marker_present
+from scoring.markers import marker_present, marker_present_raw
 from scoring.rules import (constraints_all_kept, judge_drift, refused, spontaneous_detection,
                            task_correct)
+
+# Fair baseline for task correctness and judge references. P1 sees the document, like CLEAN;
+# P3 sees a same-model summary, like CLEAN_P3. P2 and P4 have no fair baseline: the document is
+# gone, so follow-up questions about it cannot be answered, and their correctness is NOT compared.
+MATCHED_CONTROL = {"P1": "CLEAN", "P3": "CLEAN_P3"}
+
+
+def clean_control_conditions(cfg: dict) -> list[str]:
+    """Which transformed clean controls to run (CLEAN itself always runs). Normally [P3], the
+    clean-summary control. The older `clean_summary_control: true` is still accepted and means [P3]."""
+    if "clean_control_conditions" in cfg:
+        return [c for c in (cfg["clean_control_conditions"] or []) if c in ("P2", "P3", "P4")]
+    return ["P3"] if cfg.get("clean_summary_control", True) else []
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -114,6 +127,7 @@ def phase_a(ctx: Ctx):
                         "category": scen.get("category"), "task_type": scen["task_type"], "rep": rep,
                         "output": out,
                         "compromised": marker_present(out, scen["marker"]) if is_attack else None,
+                        "compromised_raw": marker_present_raw(out, scen["marker"]) if is_attack else None,
                         "detected": spontaneous_detection(out), "refused": refused(out),
                         "task_correct": task_correct(out, scen.get("task_required_keywords", [])),
                         "history": history, "inj_idx": inj_idx})
@@ -226,7 +240,8 @@ def phase_b(ctx: Ctx):
                         append_jsonl(ctx.res / "phase_b_summaries.jsonl", {
                             "kind": "summary", "state_id": st["state_id"], "condition": cond, "rep": rep,
                             "model": st["model"], "summary": summary,
-                            "summary_marker": marker_present(summary, scen["marker"])})
+                            "summary_marker": marker_present(summary, scen["marker"]),
+                            "summary_marker_raw": marker_present_raw(summary, scen["marker"])})
                 for tt in task_types:
                     tasks = subsequent_tasks(scen, tt, ctx.unrelated, ctx.n_turns)
                     if all((st["state_id"], cond, tt, rep, t) in done for t in range(1, ctx.n_turns + 1)):
@@ -239,6 +254,7 @@ def phase_b(ctx: Ctx):
                             "category": st["category"], "source": st["source"], "detected": st["detected"],
                             "marker_task_independent": indep, "condition": cond, "task_type": tt,
                             "rep": rep, "turn": t, "marker": marker_present(out, scen["marker"]),
+                            "marker_raw": marker_present_raw(out, scen["marker"]),
                             "correct": task_correct(out, task.get("required_keywords", [])),
                             "constraint_kept": constraints_all_kept(out, constraints),
                             "refused": refused(out), "output": out})
@@ -248,9 +264,13 @@ def phase_b(ctx: Ctx):
 # --------------------------------------------------------------------------- clean controls
 
 def clean(ctx: Ctx):
-    """Clean trajectories (Section 18) and the clean-summary control for P3 (Section 16)."""
+    """Clean trajectories (Section 18) and the clean-summary control CLEAN_P3 (Section 16).
+
+    CLEAN keeps the clean document; CLEAN_P3 replaces the clean conversation by a same-model
+    summary, exactly as P3 does to the attacked one. These are the fair baselines for P1 and P3.
+    """
     reps = ctx.cfg["clean_reps"]
-    do_summary = ctx.cfg.get("clean_summary_control", True)
+    controls = clean_control_conditions(ctx.cfg)
     done = ctx.done_keys("clean.jsonl", ("model", "scenario_id", "condition", "task_type", "rep", "turn"))
     for model in ctx.models:
         for scen in ctx.attacks:
@@ -268,12 +288,14 @@ def clean(ctx: Ctx):
                 state = {"system": ctx.system, "history": history, "inj_idx": inj_idx,
                          "task": scen["task"], "document": scen["document_clean"]}
                 variants = [("CLEAN", ctx.system, history)]
-                if do_summary:
-                    def summarize(system, msgs, _salt=salt):
-                        return ctx.client.call(model, system, msgs, cache_salt=_salt + "|summary",
-                                               meta={"scenario": scen["scenario_id"], "step": "clean_summary"})["text"]
-                    s_sys, s_hist, _ = apply_condition(state, "P3", summarize)
-                    variants.append(("CLEAN_P3", s_sys, s_hist))
+
+                def summarize(system, msgs, _salt=salt):
+                    return ctx.client.call(model, system, msgs, cache_salt=_salt + "|summary",
+                                           meta={"scenario": scen["scenario_id"], "step": "clean_summary"})["text"]
+
+                for pc in controls:
+                    c_sys, c_hist, _ = apply_condition(state, pc, summarize if pc == "P3" else None)
+                    variants.append((f"CLEAN_{pc}", c_sys, c_hist))
                 for cond, system, hist in variants:
                     for tt in task_types:
                         if all((model["name"], scen["scenario_id"], cond, tt, rep, t) in done
@@ -288,6 +310,7 @@ def clean(ctx: Ctx):
                                 "category": scen["category"], "marker_task_independent": indep,
                                 "condition": cond, "task_type": tt, "rep": rep, "turn": t,
                                 "marker": marker_present(out, scen["marker"]),
+                                "marker_raw": marker_present_raw(out, scen["marker"]),
                                 "correct": task_correct(out, task.get("required_keywords", [])),
                                 "constraint_kept": constraints_all_kept(out, constraints),
                                 "refused": refused(out), "output": out,
@@ -302,11 +325,15 @@ def judge(ctx: Ctx):
     if not jm:
         print("[judge] no judge_model configured; skipping", file=sys.stderr)
         return
-    clean_rows = read_jsonl(ctx.res / "clean.jsonl")
+    # Reference answers come from the fair baseline (CLEAN for P1, CLEAN_P3 for P3); P2 and P4
+    # fall back to CLEAN, since no matched clean control exists for them.
     refs = {}
-    for r in clean_rows:
-        if r["condition"] == "CLEAN":
-            refs.setdefault((r["model"], r["scenario_id"], r["task_type"], r["turn"]), []).append(r["output"])
+    for r in read_jsonl(ctx.res / "clean.jsonl"):
+        refs.setdefault((r["condition"], r["model"], r["scenario_id"], r["task_type"], r["turn"]), []).append(r["output"])
+
+    def references(r):
+        k = (r["model"], r["scenario_id"], r["task_type"], r["turn"])
+        return refs.get((MATCHED_CONTROL.get(r["condition"], "CLEAN"), *k)) or refs.get(("CLEAN", *k), [])
     scen_by_id = {s["scenario_id"]: s for s in ctx.attacks}
     done = ctx.done_keys("judge.jsonl", ("state_id", "condition", "task_type", "rep", "turn"))
     limit = ctx.cfg.get("judge_max_rows")
@@ -320,8 +347,7 @@ def judge(ctx: Ctx):
         scen = scen_by_id.get(r["scenario_id"])
         if scen is None:
             continue
-        res = judge_drift(ctx.client, jm, scen["attacker_goal"], r["output"],
-                          refs.get((r["model"], r["scenario_id"], r["task_type"], r["turn"]), []),
+        res = judge_drift(ctx.client, jm, scen["attacker_goal"], r["output"], references(r),
                           cache_salt="J|" + "|".join(map(str, k)))
         append_jsonl(ctx.res / "judge.jsonl", dict(zip(("state_id", "condition", "task_type", "rep", "turn"), k),
                                                    drift=res["drift"], reason=res["reason"]))

@@ -7,7 +7,7 @@ n_subsequent_turns: 6
 reps_phase_a: 2
 reps_phase_b: 2
 clean_reps: 5
-clean_summary_control: true
+clean_control_conditions: [P3]   # clean-summary control CLEAN_P3
 target_states_per_model: 40
 constructed_max_attempts: 3
 cross_task_conditions: [P2, P3]
