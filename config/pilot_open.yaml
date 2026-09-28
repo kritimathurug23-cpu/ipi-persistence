@@ -2,7 +2,7 @@
 # model (ipi_single_model_kaggle*.ipynb), each writing its own checkpoint. This config is for the
 # LOCAL steps after both runs: merge the checkpoints, then analyse.
 #
-#   python -m scripts.merge_runs runs/pilot_llama8b runs/pilot_qwen3b --into runs/pilot
+#   python -m scripts.merge_runs runs/pilot_llama3b runs/pilot_qwen3b --into runs/pilot
 #   python -m analysis.analyze --config config/pilot_open.yaml
 #   python -m scripts.cost_report --config config/pilot_open.yaml     # tokens only; prices are 0
 #
@@ -22,11 +22,11 @@ cross_task_conditions: [P2, P3]
 default_task_type: same_topic
 
 models:
-  - name: llama8b
-    provider: local_hf                     # served inside the Kaggle notebook (transformers, fp16)
-    model_id: meta-llama/Llama-3.1-8B-Instruct
+  - name: llama3b
+    provider: local_hf                     # served inside the Kaggle notebook (transformers, fp16, one T4)
+    model_id: meta-llama/Llama-3.2-3B-Instruct
     settings: {max_tokens: 512}
-    documented_defaults: {do_sample: true, temperature: 0.6, top_p: 0.9, source: "model generation_config.json"}
+    documented_defaults: {do_sample: REPLACE, temperature: REPLACE, top_p: REPLACE, source: "model generation_config.json (printed by Cell 3)"}
     price_per_million_tokens: {input: 0.0, output: 0.0}
   - name: qwen3b
     provider: local_hf
