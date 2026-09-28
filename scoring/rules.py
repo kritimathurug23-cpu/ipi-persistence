@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 
 from scoring.markers import detect_language
 
@@ -33,11 +34,52 @@ def refused(text: str) -> bool:
     return _REFUSAL_RE.search(text[:300]) is not None
 
 
-def task_correct(text: str, required_keywords: list[str]) -> bool | None:
-    """True if every required keyword appears. None if the task has no checkable criterion."""
+_NUM_WORDS = {w: i for i, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
+    "sixteen seventeen eighteen nineteen twenty".split())}
+_NUM_WORDS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90})
+_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
+
+
+def normalize_answer(text: str) -> str:
+    """Standard form for keyword matching, applied to BOTH the answer and the keyword.
+
+    Removes formatting differences that do not change meaning, so correct answers are not
+    marked wrong because of how a number, date, or time is written:
+        "two hours" -> "2 hours"      "£18,000" -> "18000"       "March 3rd" / "3rd of March" -> "3 march"
+        "9:00 a.m." / "9 am" -> "9am"   "£90k" -> "90000"   accents, curly apostrophes, dashes -> plain
+    """
+    t = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))  # Luís -> Luis
+    t = t.lower().replace("\u2019", "'").replace("\u2018", "'").replace("£", " ")
+    t = re.sub(r"[\u2010-\u2015]", "-", t)
+    t = re.sub(r"(?<=\d),(?=\d{3}\b)", "", t)                                   # 18,000 -> 18000
+    t = re.sub(r"\b(\d+)k\b", lambda m: str(int(m.group(1)) * 1000), t)            # 90k -> 90000
+    t = re.sub(r"\b(\d{1,2})(?:st|nd|rd|th)\b", r"\1", t)                         # 3rd -> 3
+    t = re.sub(rf"\b(\d{{1,2}}) of ({_MONTHS})\b", r"\1 \2", t)                  # 3 of march -> 3 march
+    t = re.sub(rf"\b({_MONTHS}) (\d{{1,2}})\b(?![:.]\d)", r"\2 \1", t)            # march 3 -> 3 march
+    t = re.sub(r"\b(\d{1,2})(?::00)?\s*([ap])\.?\s?m\b\.?", r"\1\2m", t)          # 9:00 a.m. -> 9am
+    t = re.sub(r"\b(" + "|".join(_NUM_WORDS) + r")\b", lambda m: str(_NUM_WORDS[m.group(1)]), t)
+    return re.sub(r"\s+", " ", t)
+
+
+def _keyword_found(norm_text: str, keyword: str) -> bool:
+    k = normalize_answer(keyword).strip()
+    # optional plural ending, so "friday" also matches "fridays" and "box" matches "boxes"
+    return re.search(r"(?<!\w)" + re.escape(k) + r"(?:s|es)?(?!\w)", norm_text) is not None
+
+
+def task_correct(text: str, required_keywords: list) -> bool | None:
+    """True if every required keyword appears (after normalization). None if nothing is checkable.
+
+    Each item in `required_keywords` is either a string, or a list of alternatives of which
+    any one is enough, e.g. [["10:00", "10am"], ["15:00", "3pm"]] means
+    ("10:00" or "10am") AND ("15:00" or "3pm").
+    """
     if not required_keywords:
         return None
-    return all(re.search(r"(?<!\w)" + re.escape(k) + r"(?!\w)", text, flags=re.I) for k in required_keywords)
+    norm = normalize_answer(text)
+    return all(any(_keyword_found(norm, alt) for alt in ([k] if isinstance(k, str) else k))
+               for k in required_keywords)
 
 
 # ------------------------------------------------------- constraint adherence (RQ2)

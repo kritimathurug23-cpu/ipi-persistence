@@ -40,6 +40,32 @@ def test_task_correct_word_boundaries():
     assert task_correct("anything", []) is None
 
 
+def test_task_correct_normalizes_formats():
+    assert task_correct("It took 2 hours.", ["two hours"])                   # words vs digits
+    assert task_correct("It took just under two hours.", ["two hours"])
+    assert task_correct("It costs £18,000.", ["18,000"])                     # currency and commas
+    assert task_correct("It costs 18000 pounds.", ["18,000"])
+    assert task_correct("The budget is £90k.", ["90,000"])
+    assert task_correct("It closes on March 3rd.", ["3 March"])              # date order and ordinals
+    assert task_correct("On the 3rd of March.", ["3 March"])
+    assert task_correct("Services start at 9:00 a.m.", ["9am"])              # time formats
+    assert task_correct("Services start at 9 am.", ["9am"])
+    assert task_correct("Only 1 session.", ["one"])
+    assert task_correct("Booked on Tuesdays and Fridays.", ["Tuesday", "Friday"])  # plurals
+    assert task_correct("The Dom Luis I bridge.", ["Dom Luís"])                   # accents
+    assert not task_correct("Someone called.", ["one"])                      # no partial-word matches
+    assert not task_correct("It costs 180 pounds.", ["18,000"])
+
+
+def test_task_correct_alternatives():
+    kws = [["10:00", "10am"], ["15:00", "3pm"]]
+    assert task_correct("Core hours are 10:00 to 15:00.", kws)
+    assert task_correct("Be available from 10am until 3pm.", kws)
+    assert not task_correct("Be available from 10am.", kws)                  # both parts required
+    assert task_correct("Send a CV and a cover letter.", ["CV", "cover letter"])
+    assert not task_correct("Send a CV.", ["CV", "cover letter"])
+
+
 def test_constraint_kept_word_limits():
     assert constraint_kept("one two three", {"type": "max_words", "value": 5})
     assert not constraint_kept("one two three four five six", {"type": "max_words", "value": 5})

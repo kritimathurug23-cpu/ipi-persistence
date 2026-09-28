@@ -10,7 +10,7 @@ Section numbers below refer to the Semester 1 proposal.
 |---|---|
 | Harness: provider adapters, logging, caching, retries, resumable runs | Get API keys, research credits, and GPU access |
 | P1–P4 conditions, with unit tests | Verify each real provider adapter in the pilot (they are written but untested against live APIs) |
-| Phase A, compromised-state building (natural + constructed), Phase B, clean controls, judge | Write the full benchmark: ~60 attack scenarios + benign controls (5 worked examples included) |
+| Phase A, compromised-state building (natural + constructed), Phase B, clean controls, judge | Benchmark reviewed by the authors (60 attack scenarios + 12 benign controls, drafted with AI assistance); revise answer keywords after the pilot |
 | Marker, detection, refusal, and correctness scoring | Literature review (Weeks 1–3) |
 | Freeze mechanism that blocks post-freeze changes | Pilot decisions, then fill in and file the preregistration |
 | Full analysis: tables, figures, McNemar, bootstrap, KM, GEE, R mixed model | Human labeling (Week 14) and a second annotator |
