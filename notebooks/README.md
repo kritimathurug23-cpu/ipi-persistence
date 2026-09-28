@@ -1,6 +1,6 @@
 # Pilot notebooks (Kaggle, open-weight models, no API keys)
 
-One notebook per model, set to the full benchmark (`LIMIT = None`; use `LIMIT = 10` for a quick pilot). Each person runs one on their own Kaggle account (own GPU quota). The full run takes 2-3 sessions per model; save a version after each and resume.
+One notebook per model, set to the full benchmark (`LIMIT = None`; use `LIMIT = 10` for a quick pilot). Each person runs one on their own Kaggle account (own GPU quota). Run with Save Version → "Save & Run All (Commit)" so it continues with the laptop closed. The Llama 8B notebook stops itself after 11 hours (a commit past 12 hours fails and saves nothing) and saves its checkpoint; attach that output as an input and commit again to continue. Expect two commits.
 
 | Notebook | Model | Accelerator | Model source |
 |---|---|---|---|
